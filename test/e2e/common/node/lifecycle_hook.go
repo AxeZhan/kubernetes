@@ -547,12 +547,12 @@ func getSidecarPodWithHook(name string, image string, lifecycle *v1.Lifecycle) *
 	}
 }
 
-var _ = SIGDescribe(feature.PodLifecycleSleepAction, func() {
+var _ = SIGDescribe(nodefeature.PodLifecycleSleepAction, feature.PodLifecycleSleepAction, "Container Lifycycle hook sleep action", func() {
 	f := framework.NewDefaultFramework("pod-lifecycle-sleep-action")
 	f.NamespacePodSecurityEnforceLevel = admissionapi.LevelBaseline
 	var podClient *e2epod.PodClient
 
-	ginkgo.Context("when create a pod with lifecycle hook using sleep action", func() {
+	ginkgo.Context("when create a pod with lifecycle hook", func() {
 		ginkgo.BeforeEach(func(ctx context.Context) {
 			podClient = e2epod.NewPodClient(f)
 		})
@@ -590,6 +590,49 @@ var _ = SIGDescribe(feature.PodLifecycleSleepAction, func() {
 			cost := time.Since(start)
 			// verify that deletion was delayed by sleep seconds
 			if cost <= time.Second || cost >= time.Second*5 {
+				framework.Failf("unexpected delay duration before killing the pod")
+			}
+		})
+
+		ginkgo.It("ignore terminated container", func(ctx context.Context) {
+			lifecycle := &v1.Lifecycle{
+				PreStop: &v1.LifecycleHandler{
+					Sleep: &v1.SleepAction{Seconds: 10},
+				},
+			}
+			name := "pod-with-prestop-sleep-hook"
+			podWithHook := getPodWithHook(name, imageutils.GetE2EImage(imageutils.BusyBox), lifecycle)
+			podWithHook.Spec.Containers[0].Command = []string{"/bin/sh"}
+			podWithHook.Spec.Containers[0].Args = []string{"-c", "exit 0"}
+			podWithHook.Spec.RestartPolicy = v1.RestartPolicyNever
+			ginkgo.By("create the pod with lifecycle hook using sleep action")
+			p := podClient.Create(ctx, podWithHook)
+			framework.ExpectNoError(e2epod.WaitForContainerTerminated(ctx, f.ClientSet, f.Namespace.Name, p.Name, name, 3*time.Minute))
+			ginkgo.By("delete the pod with lifecycle hook using sleep action")
+			start := time.Now()
+			podClient.DeleteSync(ctx, podWithHook.Name, metav1.DeleteOptions{}, e2epod.DefaultPodDeletionTimeout)
+			cost := time.Since(start)
+			// verify that deletion was not delayed by sleep seconds
+			if cost >= time.Second*7 {
+				framework.Failf("unexpected delay duration before killing the pod")
+			}
+		})
+
+		ginkgo.It("sleep duration boundary", func(ctx context.Context) {
+			lifecycle := &v1.Lifecycle{
+				PreStop: &v1.LifecycleHandler{
+					Sleep: &v1.SleepAction{Seconds: 1},
+				},
+			}
+			podWithHook := getPodWithHook("pod-with-prestop-sleep-hook", imageutils.GetPauseImageName(), lifecycle)
+			ginkgo.By("create the pod with lifecycle hook using sleep action")
+			podClient.CreateSync(ctx, podWithHook)
+			ginkgo.By("delete the pod with lifecycle hook using sleep action")
+			start := time.Now()
+			podClient.DeleteSync(ctx, podWithHook.Name, metav1.DeleteOptions{}, e2epod.DefaultPodDeletionTimeout)
+			cost := time.Since(start)
+			// verify that deletion was delayed by sleep seconds
+			if cost < time.Second*1 || cost > time.Second*3 {
 				framework.Failf("unexpected delay duration before killing the pod")
 			}
 		})

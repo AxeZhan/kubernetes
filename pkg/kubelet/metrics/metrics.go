@@ -822,6 +822,15 @@ var (
 			StabilityLevel: metrics.ALPHA,
 		},
 	)
+
+	LifecycleHandlerSleepTerminated = metrics.NewCounter(
+		&metrics.CounterOpts{
+			Subsystem:      KubeletSubsystem,
+			Name:           "lifecycle_handler_sleep_terminated_total",
+			Help:           "The number of times lifecycle sleep handler got terminated before it finishes",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
 )
 
 var registerMetrics sync.Once
@@ -904,6 +913,10 @@ func Register(collectors ...metrics.StableCollector) {
 		}
 
 		legacyregistry.MustRegister(LifecycleHandlerHTTPFallbacks)
+
+		if utilfeature.DefaultFeatureGate.Enabled(features.PodLifecycleSleepAction) {
+			legacyregistry.MustRegister(LifecycleHandlerSleepTerminated)
+		}
 	})
 }
 

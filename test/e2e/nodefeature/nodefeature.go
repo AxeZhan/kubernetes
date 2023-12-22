@@ -49,6 +49,7 @@ var (
 	RuntimeHandler                         = framework.WithNodeFeature(framework.ValidNodeFeatures.Add("RuntimeHandler"))
 	SidecarContainers                      = framework.WithNodeFeature(framework.ValidNodeFeatures.Add("SidecarContainers"))
 	SystemNodeCriticalPod                  = framework.WithNodeFeature(framework.ValidNodeFeatures.Add("SystemNodeCriticalPod"))
+	PodLifecycleSleepAction                = framework.WithNodeFeature(framework.ValidNodeFeatures.Add("PodLifecycleSleepAction"))
 )
 
 func init() {
