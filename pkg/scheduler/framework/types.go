@@ -49,6 +49,8 @@ const (
 	Add ActionType = 1 << iota
 	Delete
 
+	UpdateOtherPod
+
 	// UpdateNodeXYZ is only applicable for Node events.
 	// If you use UpdateNodeXYZ,
 	// your plugin's QueueingHint is only executed for the specific sub-Update event.
@@ -111,7 +113,8 @@ const (
 	// the previous rejection from noderesources plugin can be resolved.
 	// this plugin would implement QueueingHint for Pod/Update event
 	// that returns Queue when such label changes are made in unscheduled Pods.
-	Pod GVK = "Pod"
+	UnscheduledPod GVK = "UnscheduledPod"
+	AssignedPod    GVK = "AssignedPod"
 	// A note about NodeAdd event and UpdateNodeTaint event:
 	// NodeAdd QueueingHint isn't always called because of the internal feature called preCheck.
 	// It's definitely not something expected for plugin developers,
@@ -215,7 +218,8 @@ func (ce ClusterEvent) Match(event ClusterEvent) bool {
 
 func UnrollWildCardResource() []ClusterEventWithHint {
 	return []ClusterEventWithHint{
-		{Event: ClusterEvent{Resource: Pod, ActionType: All}},
+		{Event: ClusterEvent{Resource: AssignedPod, ActionType: All}},
+		{Event: ClusterEvent{Resource: UnscheduledPod, ActionType: All}},
 		{Event: ClusterEvent{Resource: Node, ActionType: All}},
 		{Event: ClusterEvent{Resource: PersistentVolume, ActionType: All}},
 		{Event: ClusterEvent{Resource: PersistentVolumeClaim, ActionType: All}},

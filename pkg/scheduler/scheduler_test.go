@@ -614,7 +614,10 @@ func Test_buildQueueingHintMap(t *testing.T) {
 			name:    "filter without EnqueueExtensions plugin",
 			plugins: []framework.Plugin{&filterWithoutEnqueueExtensionsPlugin{}},
 			want: map[framework.ClusterEvent][]*internalqueue.QueueingHintFunction{
-				{Resource: framework.Pod, ActionType: framework.All}: {
+				{Resource: framework.AssignedPod, ActionType: framework.All}: {
+					{PluginName: filterWithoutEnqueueExtensions, QueueingHintFn: defaultQueueingHintFn},
+				},
+				{Resource: framework.UnscheduledPod, ActionType: framework.All}: {
 					{PluginName: filterWithoutEnqueueExtensions, QueueingHintFn: defaultQueueingHintFn},
 				},
 				{Resource: framework.Node, ActionType: framework.All}: {
@@ -653,7 +656,7 @@ func Test_buildQueueingHintMap(t *testing.T) {
 			name:    "node and pod plugin",
 			plugins: []framework.Plugin{&fakeNodePlugin{}, &fakePodPlugin{}},
 			want: map[framework.ClusterEvent][]*internalqueue.QueueingHintFunction{
-				{Resource: framework.Pod, ActionType: framework.Add}: {
+				{Resource: framework.AssignedPod, ActionType: framework.Add}: {
 					{PluginName: fakePod, QueueingHintFn: fakePodPluginQueueingFn},
 				},
 				{Resource: framework.Node, ActionType: framework.Add}: {
@@ -669,7 +672,7 @@ func Test_buildQueueingHintMap(t *testing.T) {
 			plugins:             []framework.Plugin{&fakeNodePlugin{}, &fakePodPlugin{}},
 			featuregateDisabled: true,
 			want: map[framework.ClusterEvent][]*internalqueue.QueueingHintFunction{
-				{Resource: framework.Pod, ActionType: framework.Add}: {
+				{Resource: framework.AssignedPod, ActionType: framework.Add}: {
 					{PluginName: fakePod, QueueingHintFn: defaultQueueingHintFn}, // default queueing hint due to disabled feature gate.
 				},
 				{Resource: framework.Node, ActionType: framework.Add}: {
@@ -689,7 +692,7 @@ func Test_buildQueueingHintMap(t *testing.T) {
 			name:    "register plugins including emptyEventPlugin",
 			plugins: []framework.Plugin{&emptyEventPlugin{}, &fakeNodePlugin{}},
 			want: map[framework.ClusterEvent][]*internalqueue.QueueingHintFunction{
-				{Resource: framework.Pod, ActionType: framework.Add}: {
+				{Resource: framework.AssignedPod, ActionType: framework.Add}: {
 					{PluginName: fakePod, QueueingHintFn: fakePodPluginQueueingFn},
 				},
 				{Resource: framework.Node, ActionType: framework.Add}: {
@@ -797,7 +800,8 @@ func Test_UnionedGVKs(t *testing.T) {
 				Disabled: []schedulerapi.Plugin{{Name: "*"}}, // disable default plugins
 			},
 			want: map[framework.GVK]framework.ActionType{
-				framework.Pod:                   framework.All,
+				framework.AssignedPod:           framework.All,
+				framework.UnscheduledPod:        framework.All,
 				framework.Node:                  framework.All,
 				framework.CSINode:               framework.All,
 				framework.CSIDriver:             framework.All,
@@ -835,7 +839,7 @@ func Test_UnionedGVKs(t *testing.T) {
 				Disabled: []schedulerapi.Plugin{{Name: "*"}}, // disable default plugins
 			},
 			want: map[framework.GVK]framework.ActionType{
-				framework.Pod: framework.Add,
+				framework.AssignedPod: framework.Add,
 			},
 		},
 		{
@@ -850,8 +854,8 @@ func Test_UnionedGVKs(t *testing.T) {
 				Disabled: []schedulerapi.Plugin{{Name: "*"}}, // disable default plugins
 			},
 			want: map[framework.GVK]framework.ActionType{
-				framework.Pod:  framework.Add,
-				framework.Node: framework.Add | framework.UpdateNodeTaint, // When Node/Add is registered, Node/UpdateNodeTaint is automatically registered.
+				framework.AssignedPod: framework.Add,
+				framework.Node:        framework.Add | framework.UpdateNodeTaint, // When Node/Add is registered, Node/UpdateNodeTaint is automatically registered.
 			},
 		},
 		{
@@ -870,28 +874,29 @@ func Test_UnionedGVKs(t *testing.T) {
 			name:    "plugins with default profile (No feature gate enabled)",
 			plugins: schedulerapi.PluginSet{Enabled: defaults.PluginsV1.MultiPoint.Enabled},
 			want: map[framework.GVK]framework.ActionType{
-				framework.Pod:                   framework.Add | framework.UpdatePodLabel | framework.Delete,
+				framework.AssignedPod:           framework.Add | framework.UpdatePodLabel | framework.Delete,
 				framework.Node:                  framework.Add | framework.UpdateNodeAllocatable | framework.UpdateNodeLabel | framework.UpdateNodeTaint | framework.Delete,
-				framework.CSINode:               framework.All - framework.Delete,
-				framework.CSIDriver:             framework.All - framework.Delete,
-				framework.CSIStorageCapacity:    framework.All - framework.Delete,
-				framework.PersistentVolume:      framework.All - framework.Delete,
-				framework.PersistentVolumeClaim: framework.All - framework.Delete,
-				framework.StorageClass:          framework.All - framework.Delete,
+				framework.CSINode:               framework.All - framework.Delete - framework.UpdateOtherPod,
+				framework.CSIDriver:             framework.All - framework.Delete - framework.UpdateOtherPod,
+				framework.CSIStorageCapacity:    framework.All - framework.Delete - framework.UpdateOtherPod,
+				framework.PersistentVolume:      framework.All - framework.Delete - framework.UpdateOtherPod,
+				framework.PersistentVolumeClaim: framework.All - framework.Delete - framework.UpdateOtherPod,
+				framework.StorageClass:          framework.All - framework.Delete - framework.UpdateOtherPod,
 			},
 		},
 		{
 			name:    "plugins with default profile (InPlacePodVerticalScaling: enabled)",
 			plugins: schedulerapi.PluginSet{Enabled: defaults.PluginsV1.MultiPoint.Enabled},
 			want: map[framework.GVK]framework.ActionType{
-				framework.Pod:                   framework.Add | framework.UpdatePodLabel | framework.UpdatePodScaleDown | framework.Delete,
+				framework.AssignedPod:           framework.Add | framework.UpdatePodLabel | framework.UpdatePodScaleDown | framework.Delete,
+				framework.UnscheduledPod:        framework.UpdatePodScaleDown,
 				framework.Node:                  framework.Add | framework.UpdateNodeAllocatable | framework.UpdateNodeLabel | framework.UpdateNodeTaint | framework.Delete,
-				framework.CSINode:               framework.All - framework.Delete,
-				framework.CSIDriver:             framework.All - framework.Delete,
-				framework.CSIStorageCapacity:    framework.All - framework.Delete,
-				framework.PersistentVolume:      framework.All - framework.Delete,
-				framework.PersistentVolumeClaim: framework.All - framework.Delete,
-				framework.StorageClass:          framework.All - framework.Delete,
+				framework.CSINode:               framework.All - framework.Delete - framework.UpdateOtherPod,
+				framework.CSIDriver:             framework.All - framework.Delete - framework.UpdateOtherPod,
+				framework.CSIStorageCapacity:    framework.All - framework.Delete - framework.UpdateOtherPod,
+				framework.PersistentVolume:      framework.All - framework.Delete - framework.UpdateOtherPod,
+				framework.PersistentVolumeClaim: framework.All - framework.Delete - framework.UpdateOtherPod,
+				framework.StorageClass:          framework.All - framework.Delete - framework.UpdateOtherPod,
 			},
 			enableInPlacePodVerticalScaling: true,
 		},
@@ -899,14 +904,15 @@ func Test_UnionedGVKs(t *testing.T) {
 			name:    "plugins with default profile (queueingHint/InPlacePodVerticalScaling: enabled)",
 			plugins: schedulerapi.PluginSet{Enabled: defaults.PluginsV1.MultiPoint.Enabled},
 			want: map[framework.GVK]framework.ActionType{
-				framework.Pod:                   framework.Add | framework.UpdatePodLabel | framework.UpdatePodScaleDown | framework.UpdatePodTolerations | framework.UpdatePodSchedulingGatesEliminated | framework.Delete,
+				framework.AssignedPod:           framework.Add | framework.UpdatePodLabel | framework.UpdatePodScaleDown | framework.Delete,
+				framework.UnscheduledPod:        framework.UpdatePodTolerations | framework.UpdatePodSchedulingGatesEliminated | framework.UpdatePodScaleDown,
 				framework.Node:                  framework.Add | framework.UpdateNodeAllocatable | framework.UpdateNodeLabel | framework.UpdateNodeTaint | framework.Delete,
-				framework.CSINode:               framework.All - framework.Delete,
-				framework.CSIDriver:             framework.All - framework.Delete,
-				framework.CSIStorageCapacity:    framework.All - framework.Delete,
-				framework.PersistentVolume:      framework.All - framework.Delete,
-				framework.PersistentVolumeClaim: framework.All - framework.Delete,
-				framework.StorageClass:          framework.All - framework.Delete,
+				framework.CSINode:               framework.All - framework.Delete - framework.UpdateOtherPod,
+				framework.CSIDriver:             framework.All - framework.Delete - framework.UpdateOtherPod,
+				framework.CSIStorageCapacity:    framework.All - framework.Delete - framework.UpdateOtherPod,
+				framework.PersistentVolume:      framework.All - framework.Delete - framework.UpdateOtherPod,
+				framework.PersistentVolumeClaim: framework.All - framework.Delete - framework.UpdateOtherPod,
+				framework.StorageClass:          framework.All - framework.Delete - framework.UpdateOtherPod,
 			},
 			enableInPlacePodVerticalScaling: true,
 			enableSchedulerQueueingHints:    true,
@@ -1184,7 +1190,7 @@ func (*fakePodPlugin) Filter(_ context.Context, _ *framework.CycleState, _ *v1.P
 
 func (pl *fakePodPlugin) EventsToRegister(_ context.Context) ([]framework.ClusterEventWithHint, error) {
 	return []framework.ClusterEventWithHint{
-		{Event: framework.ClusterEvent{Resource: framework.Pod, ActionType: framework.Add}, QueueingHintFn: fakePodPluginQueueingFn},
+		{Event: framework.ClusterEvent{Resource: framework.AssignedPod, ActionType: framework.Add}, QueueingHintFn: fakePodPluginQueueingFn},
 	}, nil
 }
 

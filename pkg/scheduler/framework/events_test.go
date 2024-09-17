@@ -344,13 +344,13 @@ func Test_podSchedulingPropertiesChange(t *testing.T) {
 			name:   "only label is updated",
 			newPod: st.MakePod().Label("foo", "bar").Obj(),
 			oldPod: st.MakePod().Label("foo", "bar2").Obj(),
-			want:   []ClusterEvent{PodLabelChange},
+			want:   []ClusterEvent{UnscheduledPodLabelChange},
 		},
 		{
 			name:   "pod's resource request is scaled down",
 			oldPod: podWithBigRequest,
 			newPod: podWithSmallRequest,
-			want:   []ClusterEvent{PodRequestScaledDown},
+			want:   []ClusterEvent{UnscheduledPodRequestScaledDown},
 		},
 		{
 			name:   "pod's resource request is scaled up",
@@ -362,7 +362,7 @@ func Test_podSchedulingPropertiesChange(t *testing.T) {
 			name:   "both pod's resource request and label are updated",
 			oldPod: podWithBigRequest,
 			newPod: podWithSmallRequestAndLabel,
-			want:   []ClusterEvent{PodLabelChange, PodRequestScaledDown},
+			want:   []ClusterEvent{UnscheduledPodLabelChange, UnscheduledPodRequestScaledDown},
 		},
 		{
 			name:   "untracked properties of pod is updated",
@@ -374,7 +374,7 @@ func Test_podSchedulingPropertiesChange(t *testing.T) {
 			name:   "scheduling gate is eliminated",
 			newPod: st.MakePod().SchedulingGates([]string{}).Obj(),
 			oldPod: st.MakePod().SchedulingGates([]string{"foo"}).Obj(),
-			want:   []ClusterEvent{PodSchedulingGateEliminatedChange},
+			want:   []ClusterEvent{UnscheduledPodSchedulingGateEliminatedChange},
 		},
 		{
 			name:   "scheduling gate is removed, but not completely eliminated",
@@ -386,7 +386,7 @@ func Test_podSchedulingPropertiesChange(t *testing.T) {
 			name:   "pod's tolerations are updated",
 			newPod: st.MakePod().Toleration("key").Toleration("key2").Obj(),
 			oldPod: st.MakePod().Toleration("key").Obj(),
-			want:   []ClusterEvent{PodTolerationChange},
+			want:   []ClusterEvent{UnscheduledPodTolerationChange},
 		},
 	}
 	for _, tt := range tests {

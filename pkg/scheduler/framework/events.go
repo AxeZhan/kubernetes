@@ -40,31 +40,39 @@ const (
 
 var (
 	// AssignedPodAdd is the event when an assigned pod is added.
-	AssignedPodAdd = ClusterEvent{Resource: Pod, ActionType: Add, Label: "AssignedPodAdd"}
+	AssignedPodAdd = ClusterEvent{Resource: AssignedPod, ActionType: Add, Label: "AssignedPodAdd"}
 	// NodeAdd is the event when a new node is added to the cluster.
 	NodeAdd = ClusterEvent{Resource: Node, ActionType: Add, Label: "NodeAdd"}
 	// NodeDelete is the event when a node is deleted from the cluster.
 	NodeDelete = ClusterEvent{Resource: Node, ActionType: Delete, Label: "NodeDelete"}
 	// AssignedPodUpdate is the event when an assigned pod is updated.
-	AssignedPodUpdate = ClusterEvent{Resource: Pod, ActionType: Update, Label: "AssignedPodUpdate"}
+	AssignedPodUpdate = ClusterEvent{Resource: AssignedPod, ActionType: Update, Label: "AssignedPodUpdate"}
 	// UnscheduledPodAdd is the event when an unscheduled pod is added.
-	UnscheduledPodAdd = ClusterEvent{Resource: Pod, ActionType: Update, Label: "UnschedulablePodAdd"}
+	UnscheduledPodAdd = ClusterEvent{Resource: UnscheduledPod, ActionType: Update, Label: "UnschedulablePodAdd"}
 	// UnscheduledPodUpdate is the event when an unscheduled pod is updated.
-	UnscheduledPodUpdate = ClusterEvent{Resource: Pod, ActionType: Update, Label: "UnschedulablePodUpdate"}
+	UnscheduledPodUpdate = ClusterEvent{Resource: UnscheduledPod, ActionType: Update, Label: "UnschedulablePodUpdate"}
+	// UnscheduledPodUpdateOtherPod is the unscheduled pod update event of a non-target pod.
+	UnscheduledPodUpdateOtherPod = ClusterEvent{Resource: UnscheduledPod, ActionType: UpdateOtherPod, Label: "UnscheduledPodUpdateOtherPod"}
 	// UnscheduledPodDelete is the event when an unscheduled pod is deleted.
-	UnscheduledPodDelete = ClusterEvent{Resource: Pod, ActionType: Update, Label: "UnschedulablePodDelete"}
+	UnscheduledPodDelete = ClusterEvent{Resource: UnscheduledPod, ActionType: Update, Label: "UnschedulablePodDelete"}
 	// assignedPodOtherUpdate is the event when an assigned pod got updated in fields that are not covered by UpdatePodXXX.
-	assignedPodOtherUpdate = ClusterEvent{Resource: Pod, ActionType: updatePodOther, Label: "AssignedPodUpdate"}
+	assignedPodOtherUpdate = ClusterEvent{Resource: AssignedPod, ActionType: updatePodOther, Label: "AssignedPodUpdate"}
 	// AssignedPodDelete is the event when an assigned pod is deleted.
-	AssignedPodDelete = ClusterEvent{Resource: Pod, ActionType: Delete, Label: "AssignedPodDelete"}
-	// PodRequestScaledDown is the event when a pod's resource request is scaled down.
-	PodRequestScaledDown = ClusterEvent{Resource: Pod, ActionType: UpdatePodScaleDown, Label: "PodRequestScaledDown"}
-	// PodLabelChange is the event when a pod's label is changed.
-	PodLabelChange = ClusterEvent{Resource: Pod, ActionType: UpdatePodLabel, Label: "PodLabelChange"}
-	// PodTolerationChange is the event when a pod's toleration is changed.
-	PodTolerationChange = ClusterEvent{Resource: Pod, ActionType: UpdatePodTolerations, Label: "PodTolerationChange"}
-	// PodSchedulingGateEliminatedChange is the event when a pod's scheduling gate is changed.
-	PodSchedulingGateEliminatedChange = ClusterEvent{Resource: Pod, ActionType: UpdatePodSchedulingGatesEliminated, Label: "PodSchedulingGateChange"}
+	AssignedPodDelete = ClusterEvent{Resource: AssignedPod, ActionType: Delete, Label: "AssignedPodDelete"}
+	// AssignedPodRequestScaledDown is the event when a pod's resource request is scaled down.
+	AssignedPodRequestScaledDown = ClusterEvent{Resource: AssignedPod, ActionType: UpdatePodScaleDown, Label: "AssignedPodRequestScaledDown"}
+	// UnscheduledPodRequestScaledDown is the event when a pod's resource request is scaled down.
+	UnscheduledPodRequestScaledDown = ClusterEvent{Resource: UnscheduledPod, ActionType: UpdatePodScaleDown, Label: "UnscheduledPodRequestScaledDown"}
+	// AssignedPodLabelChange is the event when a AssignedPod's label is changed.
+	AssignedPodLabelChange = ClusterEvent{Resource: AssignedPod, ActionType: UpdatePodLabel, Label: "AssignedPodLabelChange"}
+	// UnscheduledPodLabelChange is the event when a UnscheduledPod's label is changed.
+	UnscheduledPodLabelChange = ClusterEvent{Resource: UnscheduledPod, ActionType: UpdatePodLabel, Label: "UnscheduledPodLabelChange"}
+	// AssignedPodTolerationChange is the event when a AssignedPod's toleration is changed.
+	AssignedPodTolerationChange = ClusterEvent{Resource: AssignedPod, ActionType: UpdatePodTolerations, Label: "AssignedPodTolerationChange"}
+	// UnscheduledPodTolerationChange is the event when a UnscheduledPod's toleration is changed.
+	UnscheduledPodTolerationChange = ClusterEvent{Resource: UnscheduledPod, ActionType: UpdatePodTolerations, Label: "UnscheduledPodTolerationChange"}
+	// UnscheduledPodSchedulingGateEliminatedChange is the event when a UnscheduledPod's scheduling gate is changed.
+	UnscheduledPodSchedulingGateEliminatedChange = ClusterEvent{Resource: UnscheduledPod, ActionType: UpdatePodSchedulingGatesEliminated, Label: "UnscheduledPodSchedulingGateChange"}
 	// NodeSpecUnschedulableChange is the event when unschedulable node spec is changed.
 	NodeSpecUnschedulableChange = ClusterEvent{Resource: Node, ActionType: UpdateNodeTaint, Label: "NodeSpecUnschedulableChange"}
 	// NodeAllocatableChange is the event when node allocatable is changed.
@@ -113,13 +121,17 @@ var (
 		AssignedPodUpdate,
 		UnscheduledPodAdd,
 		UnscheduledPodUpdate,
+		UnscheduledPodUpdateOtherPod,
 		UnscheduledPodDelete,
 		assignedPodOtherUpdate,
 		AssignedPodDelete,
-		PodRequestScaledDown,
-		PodLabelChange,
-		PodTolerationChange,
-		PodSchedulingGateEliminatedChange,
+		AssignedPodRequestScaledDown,
+		UnscheduledPodRequestScaledDown,
+		AssignedPodLabelChange,
+		UnscheduledPodLabelChange,
+		AssignedPodTolerationChange,
+		UnscheduledPodTolerationChange,
+		UnscheduledPodSchedulingGateEliminatedChange,
 		NodeSpecUnschedulableChange,
 		NodeAllocatableChange,
 		NodeLabelChange,
@@ -180,14 +192,12 @@ func extractPodScaleDown(newPod, oldPod *v1.Pod) *ClusterEvent {
 
 	for rName, oldReq := range oldPodRequests {
 		newReq, ok := newPodRequests[rName]
-		if !ok {
+		if !ok || oldReq.MilliValue() > newReq.MilliValue() {
 			// The resource request of rName is removed.
-			return &PodRequestScaledDown
-		}
-
-		if oldReq.MilliValue() > newReq.MilliValue() {
-			// The resource request of rName is scaled down.
-			return &PodRequestScaledDown
+			if len(oldPod.Spec.NodeName) != 0 {
+				return &AssignedPodRequestScaledDown
+			}
+			return &UnscheduledPodRequestScaledDown
 		}
 	}
 
@@ -196,7 +206,10 @@ func extractPodScaleDown(newPod, oldPod *v1.Pod) *ClusterEvent {
 
 func extractPodLabelsChange(newPod *v1.Pod, oldPod *v1.Pod) *ClusterEvent {
 	if isLabelChanged(newPod.GetLabels(), oldPod.GetLabels()) {
-		return &PodLabelChange
+		if len(oldPod.Spec.NodeName) != 0 {
+			return &AssignedPodLabelChange
+		}
+		return &UnscheduledPodLabelChange
 	}
 	return nil
 }
@@ -207,7 +220,10 @@ func extractPodTolerationChange(newPod *v1.Pod, oldPod *v1.Pod) *ClusterEvent {
 		// Due to API validation, the user can add, but cannot modify or remove tolerations.
 		// So, it's enough to just check the length of tolerations to notice the update.
 		// And, any updates in tolerations could make Pod schedulable.
-		return &PodTolerationChange
+		if len(oldPod.Spec.NodeName) != 0 {
+			return &AssignedPodTolerationChange
+		}
+		return &UnscheduledPodTolerationChange
 	}
 
 	return nil
@@ -216,7 +232,7 @@ func extractPodTolerationChange(newPod *v1.Pod, oldPod *v1.Pod) *ClusterEvent {
 func extractPodSchedulingGateEliminatedChange(newPod *v1.Pod, oldPod *v1.Pod) *ClusterEvent {
 	if len(newPod.Spec.SchedulingGates) == 0 && len(oldPod.Spec.SchedulingGates) != 0 {
 		// A scheduling gate on the pod is completely removed.
-		return &PodSchedulingGateEliminatedChange
+		return &UnscheduledPodSchedulingGateEliminatedChange
 	}
 
 	return nil

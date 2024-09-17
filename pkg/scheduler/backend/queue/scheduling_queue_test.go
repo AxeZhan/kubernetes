@@ -1106,7 +1106,9 @@ func TestPriorityQueue_Update(t *testing.T) {
 			prepareFunc: func(t *testing.T, logger klog.Logger, q *PriorityQueue) (oldPod, newPod *v1.Pod) {
 				q.unschedulablePods.addOrUpdate(attemptQueuedPodInfo(q.newQueuedPodInfo(medPriorityPodInfo.Pod, queuePlugin)))
 				updatedPod := medPriorityPodInfo.Pod.DeepCopy()
-				updatedPod.Annotations["foo"] = "test"
+				updatedPod.Labels = map[string]string{
+					"foo": "test",
+				}
 				return medPriorityPodInfo.Pod, updatedPod
 			},
 			schedulingHintsEnablement: []bool{false, true},
@@ -1117,7 +1119,9 @@ func TestPriorityQueue_Update(t *testing.T) {
 			prepareFunc: func(t *testing.T, logger klog.Logger, q *PriorityQueue) (oldPod, newPod *v1.Pod) {
 				q.unschedulablePods.addOrUpdate(attemptQueuedPodInfo(q.newQueuedPodInfo(medPriorityPodInfo.Pod, queuePlugin)))
 				updatedPod := medPriorityPodInfo.Pod.DeepCopy()
-				updatedPod.Annotations["foo"] = "test1"
+				updatedPod.Labels = map[string]string{
+					"foo": "test",
+				}
 				// Move clock by podInitialBackoffDuration, so that pods in the unschedulablePods would pass the backing off,
 				// and the pods will be moved into activeQ.
 				c.Step(q.podInitialBackoffDuration)
