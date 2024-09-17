@@ -148,6 +148,10 @@ func (sched *Scheduler) addPodToSchedulingQueue(obj interface{}) {
 	pod := obj.(*v1.Pod)
 	logger.V(3).Info("Add event for unscheduled pod", "pod", klog.KObj(pod))
 	sched.SchedulingQueue.Add(logger, pod)
+
+	sched.SchedulingQueue.MoveAllToActiveOrBackoffQueue(logger, framework.UnscheduledPodAdd, nil, pod, func(p *v1.Pod) bool {
+		return p.UID != pod.UID
+	})
 }
 
 func (sched *Scheduler) updatePodInSchedulingQueue(oldObj, newObj interface{}) {
@@ -171,6 +175,10 @@ func (sched *Scheduler) updatePodInSchedulingQueue(oldObj, newObj interface{}) {
 
 	logger.V(4).Info("Update event for unscheduled pod", "pod", klog.KObj(newPod))
 	sched.SchedulingQueue.Update(logger, oldPod, newPod)
+
+	sched.SchedulingQueue.MoveAllToActiveOrBackoffQueue(logger, framework.UnscheduledPodUpdateOtherPod, oldPod, newPod, func(p *v1.Pod) bool {
+		return p.UID != newPod.UID
+	})
 }
 
 func (sched *Scheduler) deletePodFromSchedulingQueue(obj interface{}) {
@@ -209,6 +217,7 @@ func (sched *Scheduler) deletePodFromSchedulingQueue(obj interface{}) {
 	if fwk.RejectWaitingPod(pod.UID) {
 		sched.SchedulingQueue.MoveAllToActiveOrBackoffQueue(logger, framework.AssignedPodDelete, pod, nil, nil)
 	}
+	sched.SchedulingQueue.MoveAllToActiveOrBackoffQueue(logger, framework.UnscheduledPodDelete, nil, nil, nil)
 }
 
 func (sched *Scheduler) addPodToCache(obj interface{}) {

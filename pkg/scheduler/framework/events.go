@@ -48,13 +48,13 @@ var (
 	// AssignedPodUpdate is the event when an assigned pod is updated.
 	AssignedPodUpdate = ClusterEvent{Resource: AssignedPod, ActionType: Update, Label: "AssignedPodUpdate"}
 	// UnscheduledPodAdd is the event when an unscheduled pod is added.
-	UnscheduledPodAdd = ClusterEvent{Resource: UnscheduledPod, ActionType: Update, Label: "UnschedulablePodAdd"}
+	UnscheduledPodAdd = ClusterEvent{Resource: UnscheduledPod, ActionType: Add, Label: "UnschedulablePodAdd"}
 	// UnscheduledPodUpdate is the event when an unscheduled pod is updated.
 	UnscheduledPodUpdate = ClusterEvent{Resource: UnscheduledPod, ActionType: Update, Label: "UnschedulablePodUpdate"}
 	// UnscheduledPodUpdateOtherPod is the unscheduled pod update event of a non-target pod.
 	UnscheduledPodUpdateOtherPod = ClusterEvent{Resource: UnscheduledPod, ActionType: UpdateOtherPod, Label: "UnscheduledPodUpdateOtherPod"}
 	// UnscheduledPodDelete is the event when an unscheduled pod is deleted.
-	UnscheduledPodDelete = ClusterEvent{Resource: UnscheduledPod, ActionType: Update, Label: "UnschedulablePodDelete"}
+	UnscheduledPodDelete = ClusterEvent{Resource: UnscheduledPod, ActionType: Delete, Label: "UnschedulablePodDelete"}
 	// assignedPodOtherUpdate is the event when an assigned pod got updated in fields that are not covered by UpdatePodXXX.
 	assignedPodOtherUpdate = ClusterEvent{Resource: AssignedPod, ActionType: updatePodOther, Label: "AssignedPodUpdate"}
 	// AssignedPodDelete is the event when an assigned pod is deleted.
