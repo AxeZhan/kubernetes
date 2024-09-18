@@ -2828,3 +2828,192 @@ func TestPreEnqueuePluginEventsToRegister(t *testing.T) {
 		}
 	}
 }
+
+type FilterPodAdd struct {
+}
+
+func (f *FilterPodAdd) Name() string {
+	return "FilterPodAdd"
+}
+
+func (f *FilterPodAdd) Filter(_ context.Context, _ *framework.CycleState, _ *v1.Pod, _ *framework.NodeInfo) *framework.Status {
+	return framework.NewStatus(framework.Unschedulable, "always fail")
+}
+
+func (f *FilterPodAdd) EventsToRegister(_ context.Context) ([]framework.ClusterEventWithHint, error) {
+	return []framework.ClusterEventWithHint{
+		{Event: framework.ClusterEvent{Resource: framework.UnscheduledPod, ActionType: framework.Add}},
+	}, nil
+}
+
+type FilterUpdateOther struct {
+}
+
+func (f *FilterUpdateOther) Name() string {
+	return "FilterUpdateOther"
+}
+
+func (f *FilterUpdateOther) Filter(_ context.Context, _ *framework.CycleState, _ *v1.Pod, _ *framework.NodeInfo) *framework.Status {
+	return framework.NewStatus(framework.Unschedulable, "always fail")
+}
+
+func (f *FilterUpdateOther) EventsToRegister(_ context.Context) ([]framework.ClusterEventWithHint, error) {
+	return []framework.ClusterEventWithHint{
+		{Event: framework.ClusterEvent{Resource: framework.UnscheduledPod, ActionType: framework.UpdateOtherPod}},
+	}, nil
+}
+
+type FilterPodDelete struct {
+}
+
+func (f *FilterPodDelete) Name() string {
+	return "FilterPodDelete"
+}
+
+func (f *FilterPodDelete) Filter(_ context.Context, _ *framework.CycleState, _ *v1.Pod, _ *framework.NodeInfo) *framework.Status {
+	return framework.NewStatus(framework.Unschedulable, "always fail")
+}
+
+func (f *FilterPodDelete) EventsToRegister(_ context.Context) ([]framework.ClusterEventWithHint, error) {
+	return []framework.ClusterEventWithHint{
+		{Event: framework.ClusterEvent{Resource: framework.UnscheduledPod, ActionType: framework.Delete}},
+	}, nil
+}
+
+var (
+	_ framework.FilterPlugin = &FilterPodAdd{}
+	_ framework.FilterPlugin = &FilterUpdateOther{}
+	_ framework.FilterPlugin = &FilterPodDelete{}
+)
+
+func TestUnscheduledPodEvents(t *testing.T) {
+	tests := []struct {
+		name      string
+		plugin    string
+		pod       string
+		triggerFn func(testCtx *testutils.TestContext, pod string) error
+	}{
+		{
+			name:   "UnscheduledPodAdd",
+			plugin: "FilterPodAdd",
+			triggerFn: func(testCtx *testutils.TestContext, pod string) error {
+				pause := imageutils.GetPauseImageName()
+				cs, ns, ctx := testCtx.ClientSet, testCtx.NS.Name, testCtx.Ctx
+
+				triggerPod := st.MakePod().Namespace(ns).Name("trigger-pod").Container(pause).Obj()
+				if _, err := cs.CoreV1().Pods(ns).Create(ctx, triggerPod, metav1.CreateOptions{}); err != nil {
+					t.Fatalf("Failed to create Pod %q: %v", triggerPod.Name, err)
+				}
+				return nil
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			registry := frameworkruntime.Registry{
+				"FilterPodAdd": func(_ context.Context, _ runtime.Object, fh framework.Handle) (framework.Plugin, error) {
+					return &FilterPodAdd{}, nil
+				},
+				"FilterUpdateOther": func(_ context.Context, _ runtime.Object, fh framework.Handle) (framework.Plugin, error) {
+					return &FilterUpdateOther{}, nil
+				},
+				"FilterPodDelete": func(_ context.Context, _ runtime.Object, fh framework.Handle) (framework.Plugin, error) {
+					return &FilterPodDelete{}, nil
+				},
+			}
+
+			cfg := configtesting.V1ToInternalWithDefaults(t, configv1.KubeSchedulerConfiguration{
+				Profiles: []configv1.KubeSchedulerProfile{{
+					SchedulerName: pointer.String(v1.DefaultSchedulerName),
+					Plugins: &configv1.Plugins{
+						Filter: configv1.PluginSet{
+							Enabled: []configv1.Plugin{
+								{Name: tt.plugin},
+							},
+						},
+					},
+				}}})
+
+			// Use zero backoff seconds to bypass backoffQ.
+			// It's intended to not start the scheduler's queue, and hence to
+			// not start any flushing logic. We will pop and schedule the Pods manually later.
+			testCtx := testutils.InitTestSchedulerWithOptions(
+				t,
+				testutils.InitTestAPIServer(t, "unscheduled-pod-events", nil),
+				0,
+				scheduler.WithProfiles(cfg.Profiles...),
+				scheduler.WithFrameworkOutOfTreeRegistry(registry),
+				scheduler.WithPodInitialBackoffSeconds(0),
+				scheduler.WithPodMaxBackoffSeconds(0),
+			)
+			testutils.SyncSchedulerInformerFactory(testCtx)
+
+			defer testCtx.Scheduler.SchedulingQueue.Close()
+
+			cs, ns, ctx := testCtx.ClientSet, testCtx.NS.Name, testCtx.Ctx
+
+			// Create one Node.
+			node := st.MakeNode().Name("fake-node").Obj()
+			if _, err := cs.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{}); err != nil {
+				t.Fatalf("Failed to create Node %q: %v", node.Name, err)
+			}
+
+			// Create the target Pod.
+			pause := imageutils.GetPauseImageName()
+			targetPod := st.MakePod().Namespace(ns).Name(tt.pod).Container(pause).Obj()
+			if _, err := cs.CoreV1().Pods(ns).Create(ctx, targetPod, metav1.CreateOptions{}); err != nil {
+				t.Fatalf("Failed to create Pod %q: %v", targetPod.Name, err)
+			}
+
+			// Wait for the testing Pod to be present in the scheduling queue.
+			if err := wait.PollUntilContextTimeout(ctx, time.Millisecond*200, wait.ForeverTestTimeout, false, func(ctx context.Context) (bool, error) {
+				activePods := testCtx.Scheduler.SchedulingQueue.PodsInActiveQ()
+				return len(activePods) == 1, nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+
+			// Pop target-pod out. It should be unschedulable.
+			podInfo := testutils.NextPodOrDie(t, testCtx)
+			fwk, ok := testCtx.Scheduler.Profiles[podInfo.Pod.Spec.SchedulerName]
+			if !ok {
+				t.Fatalf("Cannot find the profile for Pod %v", podInfo.Pod.Name)
+			}
+			// Schedule the Pod manually.
+			_, fitError := testCtx.Scheduler.SchedulePod(ctx, fwk, framework.NewCycleState(), podInfo.Pod)
+			// The fitError is expected to be non-nil.
+			if fitError == nil {
+				t.Fatalf("Expect Pod %v to fail at scheduling.", podInfo.Pod.Name)
+			}
+			testCtx.Scheduler.FailureHandler(ctx, fwk, podInfo, framework.NewStatus(framework.Unschedulable).WithError(fitError), nil, time.Now())
+
+			// Wait for the testing Pod to be present in the unschedulable queue.
+			if err := wait.PollUntilContextTimeout(ctx, time.Millisecond*200, wait.ForeverTestTimeout, false, func(ctx context.Context) (bool, error) {
+				activePods := testCtx.Scheduler.SchedulingQueue.PodsInActiveQ()
+				pendingPods, _ := testCtx.Scheduler.SchedulingQueue.PendingPods()
+				return len(activePods) == 0 && len(pendingPods) == 1, nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+
+			if err := tt.triggerFn(testCtx, tt.pod); err != nil {
+				t.Fatalf("triggerFn failed, %v", err)
+			}
+
+			// Wait for the testing Pod to be present in the active queue.
+			if err := wait.PollUntilContextTimeout(ctx, time.Millisecond*200, wait.ForeverTestTimeout, false, func(ctx context.Context) (bool, error) {
+				activePods := testCtx.Scheduler.SchedulingQueue.PodsInActiveQ()
+				for _, p := range activePods {
+					if p.Name == targetPod.Name {
+						return true, nil
+					}
+				}
+				return false, nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+
+		})
+	}
+}
