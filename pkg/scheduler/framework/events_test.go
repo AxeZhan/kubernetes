@@ -334,6 +334,13 @@ func Test_podSchedulingPropertiesChange(t *testing.T) {
 			},
 		},
 	}
+
+	withNode := func(pod *v1.Pod, node string) *v1.Pod {
+		p := pod.DeepCopy()
+		p.Spec.NodeName = node
+		return p
+	}
+
 	tests := []struct {
 		name   string
 		newPod *v1.Pod
@@ -347,10 +354,22 @@ func Test_podSchedulingPropertiesChange(t *testing.T) {
 			want:   []ClusterEvent{UnscheduledPodLabelChange},
 		},
 		{
+			name:   "assigned pod, only label is updated",
+			newPod: st.MakePod().Node("node1").Label("foo", "bar").Obj(),
+			oldPod: st.MakePod().Node("node1").Label("foo", "bar2").Obj(),
+			want:   []ClusterEvent{AssignedPodLabelChange},
+		},
+		{
 			name:   "pod's resource request is scaled down",
 			oldPod: podWithBigRequest,
 			newPod: podWithSmallRequest,
 			want:   []ClusterEvent{UnscheduledPodRequestScaledDown},
+		},
+		{
+			name:   "assigned pod, pod's resource request is scaled down",
+			oldPod: withNode(podWithBigRequest, "node1"),
+			newPod: withNode(podWithSmallRequest, "node1"),
+			want:   []ClusterEvent{AssignedPodRequestScaledDown},
 		},
 		{
 			name:   "pod's resource request is scaled up",
@@ -363,6 +382,12 @@ func Test_podSchedulingPropertiesChange(t *testing.T) {
 			oldPod: podWithBigRequest,
 			newPod: podWithSmallRequestAndLabel,
 			want:   []ClusterEvent{UnscheduledPodLabelChange, UnscheduledPodRequestScaledDown},
+		},
+		{
+			name:   "assigned pod,,both pod's resource request and label are updated",
+			oldPod: withNode(podWithBigRequest, "node1"),
+			newPod: withNode(podWithSmallRequestAndLabel, "node1"),
+			want:   []ClusterEvent{AssignedPodLabelChange, AssignedPodRequestScaledDown},
 		},
 		{
 			name:   "untracked properties of pod is updated",
@@ -387,6 +412,12 @@ func Test_podSchedulingPropertiesChange(t *testing.T) {
 			newPod: st.MakePod().Toleration("key").Toleration("key2").Obj(),
 			oldPod: st.MakePod().Toleration("key").Obj(),
 			want:   []ClusterEvent{UnscheduledPodTolerationChange},
+		},
+		{
+			name:   "assigned pod, pod's tolerations are updated",
+			newPod: st.MakePod().Node("node1").Toleration("key").Toleration("key2").Obj(),
+			oldPod: st.MakePod().Node("node1").Toleration("key").Obj(),
+			want:   []ClusterEvent{AssignedPodTolerationChange},
 		},
 	}
 	for _, tt := range tests {

@@ -1626,9 +1626,15 @@ func TestCloudEvent_Match(t *testing.T) {
 			wantResult:  true,
 		},
 		{
-			name:        "event with resource = 'Pod' matching with coming events carries same actionType",
+			name:        "event with resource = 'UnscheduledPod' matching with coming events carries same actionType",
 			event:       ClusterEvent{Resource: UnscheduledPod, ActionType: UpdateNodeLabel | UpdateNodeTaint},
 			comingEvent: ClusterEvent{Resource: UnscheduledPod, ActionType: UpdateNodeLabel},
+			wantResult:  true,
+		},
+		{
+			name:        "event with resource = 'AssignedPod' matching with coming events carries same actionType",
+			event:       ClusterEvent{Resource: AssignedPod, ActionType: UpdateNodeLabel | UpdateNodeTaint},
+			comingEvent: ClusterEvent{Resource: AssignedPod, ActionType: UpdateNodeLabel},
 			wantResult:  true,
 		},
 		{

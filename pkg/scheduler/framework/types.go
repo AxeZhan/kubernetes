@@ -49,6 +49,9 @@ const (
 	Add ActionType = 1 << iota
 	Delete
 
+	// UpdateOtherPod if only applicable for UnscheduledPod events.
+	// If you plugin uses UpdateOtherPod,
+	// it indicates that the rejection from it could be resolved by updating another unscheduled Pod.
 	UpdateOtherPod
 
 	// UpdateNodeXYZ is only applicable for Node events.
@@ -104,14 +107,14 @@ const (
 	//           - an existing Pod that was unscheduled but gets scheduled to a Node.
 	//
 	// Note that the Pod event type includes the events for the unscheduled Pod itself.
-	// i.e., when unscheduled Pods are updated, the scheduling queue checks with Pod/Update QueueingHint(s) whether the update may make the pods schedulable,
+	// i.e., when unscheduled Pods are updated, the scheduling queue checks with UnscheduledPod/Update QueueingHint(s) whether the update may make the pods schedulable,
 	// and requeues them to activeQ/backoffQ when at least one QueueingHint(s) return Queue.
-	// Plugins **have to** implement a QueueingHint for Pod/Update event
+	// Plugins **have to** implement a QueueingHint for UnscheduledPod/Update event
 	// if the rejection from them could be resolved by updating unscheduled Pods themselves.
 	// Example: Pods that require excessive resources may be rejected by the noderesources plugin,
 	// if this unscheduled pod is updated to require fewer resources,
 	// the previous rejection from noderesources plugin can be resolved.
-	// this plugin would implement QueueingHint for Pod/Update event
+	// this plugin would implement QueueingHint for UnscheduledPod/Update event
 	// that returns Queue when such label changes are made in unscheduled Pods.
 	UnscheduledPod GVK = "UnscheduledPod"
 	AssignedPod    GVK = "AssignedPod"
