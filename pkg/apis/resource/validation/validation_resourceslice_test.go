@@ -23,6 +23,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/apis/resource"
 	"k8s.io/utils/ptr"
 )
@@ -201,11 +202,28 @@ func TestValidateResourceSlice(t *testing.T) {
 			wantFailures: field.ErrorList{field.Invalid(field.NewPath("spec", "driver"), badName, "a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')")},
 			slice:        testResourceSlice(goodName, goodName, badName),
 		},
+		"invalid-node-selecor-label-value": {
+			wantFailures: field.ErrorList{field.Invalid(field.NewPath("spec", "nodeSelector", "nodeSelectorTerms").Index(0).Child("matchExpressions").Index(0).Child("values").Index(0), "-1", "a valid label must be an empty string or consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyValue',  or 'my_value',  or '12345', regex used for validation is '(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?')")},
+			slice: func() *resource.ResourceSlice {
+				slice := testResourceSlice(goodName, goodName, driverName)
+				slice.Spec.NodeName = ""
+				slice.Spec.NodeSelector = &core.NodeSelector{
+					NodeSelectorTerms: []core.NodeSelectorTerm{{
+						MatchExpressions: []core.NodeSelectorRequirement{{
+							Key:      "foo",
+							Operator: core.NodeSelectorOpIn,
+							Values:   []string{"-1"},
+						}},
+					}},
+				}
+				return slice
+			}(),
+		},
 	}
 
 	for name, scenario := range scenarios {
 		t.Run(name, func(t *testing.T) {
-			errs := ValidateResourceSlice(scenario.slice)
+			errs := ValidateResourceSlice(scenario.slice, ResourceSliceValidationOptions{})
 			assert.Equal(t, scenario.wantFailures, errs)
 		})
 	}
@@ -256,12 +274,34 @@ func TestValidateResourceSliceUpdate(t *testing.T) {
 				return slice
 			},
 		},
+		"update-with-invalid-nodeselector-label-value": {
+			oldResourceSlice: func() *resource.ResourceSlice {
+				slice := validResourceSlice.DeepCopy()
+				slice.Spec.NodeName = ""
+				slice.Spec.NodeSelector = &core.NodeSelector{
+					NodeSelectorTerms: []core.NodeSelectorTerm{{
+						MatchExpressions: []core.NodeSelectorRequirement{{
+							Key:      "foo",
+							Operator: core.NodeSelectorOpIn,
+							Values:   []string{"-1"},
+						}},
+					}},
+				}
+				return slice
+			}(),
+			update: func(slice *resource.ResourceSlice) *resource.ResourceSlice {
+				slice.Labels = map[string]string{"foo": "bar"}
+				return slice
+			},
+		},
 	}
 
 	for name, scenario := range scenarios {
 		t.Run(name, func(t *testing.T) {
 			scenario.oldResourceSlice.ResourceVersion = "1"
-			errs := ValidateResourceSliceUpdate(scenario.update(scenario.oldResourceSlice.DeepCopy()), scenario.oldResourceSlice)
+			resourceSlice, oldResourceSlice := scenario.update(scenario.oldResourceSlice.DeepCopy()), scenario.oldResourceSlice
+			opts := ValidationOptionsForResourceSlice(resourceSlice, oldResourceSlice)
+			errs := ValidateResourceSliceUpdate(resourceSlice, oldResourceSlice, opts)
 			assert.Equal(t, scenario.wantFailures, errs)
 		})
 	}
